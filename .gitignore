@@ -41,12 +41,12 @@ venv
 *.vscode/
 
 #notebooks
-*/**/.ipynb_checkpoints/*
+.ipynb_checkpoints/*
 
 # logs
 */**/checkpoints/*
 */**/mlruns/*
-*/**/tensorboard_logs/*
+tensorboard_logs/
 */**/wandb/*
 checkpoints/*
 wandb/*
