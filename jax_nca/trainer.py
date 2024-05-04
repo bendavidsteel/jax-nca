@@ -44,10 +44,10 @@ def create_train_state(rng, nca, learning_rate, shape):
 
 def clip_grad_norm(grad):
     factor = 1.0 / (
-        jnp.linalg.norm(jax.tree_util.tree_leaves(jax.tree_map(jnp.linalg.norm, grad)))
+        jnp.linalg.norm(jax.tree_util.tree_leaves(jax.tree.map(jnp.linalg.norm, grad))[0])
         + 1e-8
     )
-    return jax.tree_map((lambda x: x * factor), grad)
+    return jax.tree.map((lambda x: x * factor), grad)
 
 
 @functools.partial(jax.jit, static_argnames=("apply_fn", "num_steps"))
@@ -134,73 +134,70 @@ class EmojiTrainer:
         self.state = create_train_state(init_rng, self.nca, lr, self.dataset.img_shape)
 
         bar = tqdm.tqdm(np.arange(num_epochs))
-        try:
-            for i in bar:
-                num_steps = int(np.random.randint(min_steps, max_steps))
-                samples, indices = pool.sample(batch_size)
-                for j in range(len(samples)):
-                    if samples[j] is None:
-                        samples[j] = self.nca.create_seed(
-                            self.nca.num_hidden_channels,
-                            self.nca.num_target_channels,
-                            shape=self.img_shape[:-1],
-                            batch_size=1,
-                        )[0]
-                samples[0] = self.nca.create_seed(
-                    self.nca.num_hidden_channels,
-                    self.nca.num_target_channels,
-                    shape=self.img_shape[:-1],
-                    batch_size=1,
-                )[0]
-                batch = np.stack(samples)
-                if self.n_damage > 0:
-                    damage = (
-                        1.0
-                        - make_circle_masks(
-                            int(self.n_damage), self.img_shape[0], self.img_shape[1]
-                        )[..., None]
-                    )
-                    batch[-self.n_damage :] *= damage
 
-                batch = jnp.array(batch)
-                targets, rgb_targets = self.dataset.get_batch(batch_size)
-                targets = jnp.array(targets)
-
-                self.state, loss, grads, outputs, rgb_outputs = train_step(
-                    self.nca.apply,
-                    self.state,
-                    batch,
-                    targets,
-                    num_steps=num_steps,
-                    rng=rng,
+        for i in bar:
+            num_steps = int(np.random.randint(min_steps, max_steps))
+            samples, indices = pool.sample(batch_size)
+            for j in range(len(samples)):
+                if samples[j] is None:
+                    samples[j] = self.nca.create_seed(
+                        self.nca.num_hidden_channels,
+                        self.nca.num_target_channels,
+                        shape=self.img_shape[:-1],
+                        batch_size=1,
+                    )[0]
+            samples[0] = self.nca.create_seed(
+                self.nca.num_hidden_channels,
+                self.nca.num_target_channels,
+                shape=self.img_shape[:-1],
+                batch_size=1,
+            )[0]
+            batch = np.stack(samples)
+            if self.n_damage > 0:
+                damage = (
+                    1.0
+                    - make_circle_masks(
+                        int(self.n_damage), self.img_shape[0], self.img_shape[1]
+                    )[..., None]
                 )
+                batch[-self.n_damage :] *= damage
 
-                grad_dict = {k: dict(grads[k]) for k in grads.keys()}
-                grad_dict = flatten(grad_dict)
+            batch = jnp.array(batch)
+            targets, rgb_targets = self.dataset.get_batch(batch_size)
+            targets = jnp.array(targets)
 
-                grad_dict = {
-                    k: {kk: np.sum(vv).item() for kk, vv in v.items()}
-                    for k, v in grad_dict.items()
-                }
-                grad_dict = flatten(grad_dict)
+            self.state, loss, grads, outputs, rgb_outputs = train_step(
+                self.nca.apply,
+                self.state,
+                batch,
+                targets,
+                num_steps=num_steps,
+                rng=rng,
+            )
 
-                pool[indices] = np.array(outputs)
+            grad_dict = {k: dict(grads[k]) for k in grads.keys()}
+            grad_dict = flatten(grad_dict)
 
-                bar.set_description("Loss: {}".format(loss.item()))
+            # grad_dict = {
+            #     k: {kk: np.sum(vv) for kk, vv in v}
+            #     for k, v in grad_dict.items()
+            # }
+            grad_dict = flatten(grad_dict)
 
-                self.emit_metrics(
-                    writer,
-                    i,
-                    batch,
-                    rgb_outputs,
-                    rgb_targets,
-                    loss.item(),
-                    metrics=grad_dict,
-                )
+            pool[indices] = np.array(outputs)
 
-            return self.state
-        except Exception:
-            return self.state
+            bar.set_description("Loss: {}".format(loss.item()))
+
+            self.emit_metrics(
+                writer,
+                i,
+                batch,
+                rgb_outputs,
+                rgb_targets,
+                loss.item()
+            )
+
+        return self.state
 
     def emit_metrics(
         self, train_writer, i: int, batch, outputs, targets, loss, metrics={}
@@ -212,3 +209,16 @@ class EmojiTrainer:
         train_writer.add_images("targets", targets, i, dataformats="NHWC")
         for k in metrics:
             train_writer.add_scalar(k, metrics[k], i)
+
+def main():
+    from jax_nca.nca import NCA
+    from jax_nca.dataset import ImageDataset
+    
+    dataset = ImageDataset(emoji='🦎', img_size=64)
+    nca = NCA(16, 3, trainable_perception=False, cell_fire_rate=1.0, alpha_living_threshold=0.1)
+    trainer = EmojiTrainer(dataset, nca, n_damage=0)
+    trainer.train(1000, batch_size=8, lr=2e-4, min_steps=64, max_steps=96)
+    state = trainer.state
+
+if __name__=="__main__":
+    main()

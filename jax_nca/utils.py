@@ -8,7 +8,7 @@ import requests
 def load_image(url, size):
     r = requests.get(url)
     img = PIL.Image.open(io.BytesIO(r.content))
-    img.thumbnail((40, 40), PIL.Image.ANTIALIAS)
+    img.thumbnail((40, 40), PIL.Image.LANCZOS)
     img = np.float32(img) / 255.0
     # premultiply RGB by Alpha
     img[..., :3] *= img[..., 3:]
