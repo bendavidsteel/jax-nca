@@ -113,6 +113,7 @@ class NCA(nn.Module):
     num_hidden_channels: int
     num_target_channels: int = 3
     alpha_living_threshold: float = 0.1
+    alive_layer: bool = True
     cell_fire_rate: float = 1.0
     trainable_perception: bool = False
     alpha: float = 1.0
@@ -159,7 +160,8 @@ class NCA(nn.Module):
         return jnp.array(np.random.uniform(size=x[..., :1].shape) <= cell_fire_rate)
 
     def __call__(self, x, rng):
-        pre_life_mask = self.alive(x, self.alpha_living_threshold)
+        if self.alive_layer:
+            pre_life_mask = self.alive(x, self.alpha_living_threshold)
 
         perception_out = self.perception(x)
         update = self.alpha * jnp.reshape(self.update_net(perception_out), x.shape)
@@ -172,12 +174,15 @@ class NCA(nn.Module):
         else:
             x = x + update
 
-        post_life_mask = self.alive(x, self.alpha_living_threshold)
+        if self.alive_layer:
+            post_life_mask = self.alive(x, self.alpha_living_threshold)
 
-        life_mask = pre_life_mask & post_life_mask
-        life_mask = life_mask.astype(float)
+            life_mask = pre_life_mask & post_life_mask
+            life_mask = life_mask.astype(float)
 
-        return x * life_mask
+            x = x * life_mask
+
+        return x
 
     def save(self, params, path: str):
         bytes_output = serialization.to_bytes(params)
@@ -201,3 +206,64 @@ class NCA(nn.Module):
         rgb, a = x[..., :3], jnp.clip(x[..., 3:4], 0.0, 1.0)
         rgb = jnp.clip(1.0 - a + rgb, 0.0, 1.0)
         return rgb
+    
+class SobelLaplacianPerceptionNet(nn.Module):
+    @nn.compact
+    def __call__(self, x):
+        # x shape - BHWC
+
+        num_channels = x.shape[-1]
+
+        # 2D sobel kernels - IOHW layout
+
+        x_sobel_kernel = jnp.zeros(
+            (num_channels, num_channels, 3, 3), dtype=jnp.float32
+        )
+        x_sobel_kernel += (
+            jnp.array([[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]])[
+                jnp.newaxis, jnp.newaxis, :, :
+            ]
+            / 8.0
+        )
+
+        y_sobel_kernel = jnp.zeros(
+            (num_channels, num_channels, 3, 3), dtype=jnp.float32
+        )
+        y_sobel_kernel += (
+            jnp.array([[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]])[
+                jnp.newaxis, jnp.newaxis, :, :
+            ]
+            / 8.0
+        )
+        x = jnp.transpose(x, [0, 3, 1, 2])  # N C H W
+
+        x_out = lax.conv(
+            x,  # lhs = NCHW image tensor
+            x_sobel_kernel,  # rhs = OIHW conv kernel tensor
+            (1, 1),  # window strides
+            "SAME",
+        )  # padding mode
+
+        y_out = lax.conv(
+            x,  # lhs = NCHW image tensor
+            y_sobel_kernel,  # rhs = OIHW conv kernel tensor
+            (1, 1),  # window strides
+            "SAME",
+        )  # padding mode
+
+        out = jnp.concatenate([x, x_out, y_out], axis=1)
+        return jnp.transpose(out, [0, 2, 3, 1])  # N H W C
+
+class TextureNCA(NCA):
+    def setup(self):
+        self.alive_layer = False
+        self.perception = SobelLaplacianPerceptionNet()
+    
+class muNCA(TextureNCA):
+    # https://arxiv.org/pdf/2111.13545
+    def setup(self):
+        raise NotImplementedError("muNCA is not implemented yet")
+    
+class isoNCA(TextureNCA):
+    def setup(self):
+        raise NotImplementedError("isoNCA is not implemented yet")

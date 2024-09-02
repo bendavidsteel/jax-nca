@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from einops import repeat
 
-from jax_nca.utils import load_emoji
+from jax_nca.utils import load_emoji, load_image
 
 
 def to_alpha(x):
@@ -18,9 +18,7 @@ def rgb(x, rgb=False):
 
 
 class ImageDataset:
-    def __init__(self, emoji: str = None, img: np.array = None, img_size: int = 64):
-        if img is None:
-            img = load_emoji(emoji, img_size)
+    def __init__(self, img: np.array):
         self.rgb = img.shape[-1] == 3
         self.img_shape = img.shape
         self.img = np.expand_dims(img, 0)  # (b w h c)
@@ -34,3 +32,13 @@ class ImageDataset:
     def visualize(self):
         _ = plt.imshow(self.rgb_img[0])
         plt.show()
+
+class EmojiDataset(ImageDataset):
+    def __init__(self, emoji: str = None, img_size: int = 64):
+        img = load_emoji(emoji, img_size)
+        super().__init__(img)
+
+class WebLinkDataset(ImageDataset):
+    def __init__(self, link: str, img_size: int = 64):
+        img = load_image(link, img_size)
+        super().__init__(img)

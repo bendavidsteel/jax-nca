@@ -15,11 +15,11 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 setup(
     name="jax_nca",
     version="0.1.2",
-    url="https://github.com/shyamsn97/jax-nca",
+    url="https://github.com/bendavidsteel/jax-nca",
     license='MIT',
 
-    author="Shyam Sudhakaran",
-    author_email="shyamsnair@protonmail.com",
+    author="Ben Steel",
+    author_email="bendavidsteel@gmail.com",
 
     description="Neural Cellular Automata (https://distill.pub/2020/growing-ca/ -- Mordvintsev, et al., \"Growing Neural Cellular Automata\", Distill, 2020) implemented in JAX",
 
