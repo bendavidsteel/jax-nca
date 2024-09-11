@@ -235,6 +235,17 @@ class SobelLaplacianPerceptionNet(nn.Module):
             ]
             / 8.0
         )
+
+        laplacian_kernel = jnp.zeros(
+            (num_channels, num_channels, 3, 3), dtype=jnp.float32
+        )
+        laplacian_kernel += (
+            jnp.array([[1.0, 2.0, 1.0], [2.0, -12.0, 2.0], [1.0, 2.0, 1.0]])[
+                jnp.newaxis, jnp.newaxis, :, :
+            ]
+            / 16.0
+        )
+
         x = jnp.transpose(x, [0, 3, 1, 2])  # N C H W
 
         x_out = lax.conv(
@@ -251,13 +262,38 @@ class SobelLaplacianPerceptionNet(nn.Module):
             "SAME",
         )  # padding mode
 
-        out = jnp.concatenate([x, x_out, y_out], axis=1)
+        lap_out = lax.conv(
+            x,  # lhs = NCHW image tensor
+            laplacian_kernel,  # rhs = OIHW conv kernel tensor
+            (1, 1),  # window strides
+            "SAME",
+        )  # padding mode
+
+        out = jnp.concatenate([x, lap_out, x_out, y_out], axis=1)
         return jnp.transpose(out, [0, 2, 3, 1])  # N H W C
 
 class TextureNCA(NCA):
+    alive_layer = False
+
     def setup(self):
-        self.alive_layer = False
+        num_channels = 3 + self.num_hidden_channels
         self.perception = SobelLaplacianPerceptionNet()
+        self.update_net = UpdateNet(num_channels)
+
+    @classmethod
+    def create_seed(
+        cls,
+        num_hidden_channels: int,
+        num_target_channels: int = 3,
+        shape: Tuple[int] = (48, 48),
+        batch_size: int = 1,
+    ):
+        seed = np.random.uniform(size=(batch_size, *shape, num_hidden_channels + 3))
+        return seed
+    
+    def to_rgb(self, x: jnp.array):
+        rgb = x[..., :3]
+        return rgb
     
 class muNCA(TextureNCA):
     # https://arxiv.org/pdf/2111.13545

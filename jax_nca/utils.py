@@ -5,16 +5,22 @@ import PIL.Image
 import requests
 
 
-def load_image(url, size):
+def load_image(url, size, pad=True):
     r = requests.get(url)
     img = PIL.Image.open(io.BytesIO(r.content))
-    img.thumbnail((40, 40), PIL.Image.LANCZOS)
+    if pad:
+        img.thumbnail((40, 40), PIL.Image.LANCZOS)
+    else:
+        img = img.resize((size, size))
     img = np.float32(img) / 255.0
-    # premultiply RGB by Alpha
-    img[..., :3] *= img[..., 3:]
-    # pad to self.h, self.h
-    diff = size - 40
-    img = np.pad(img, ((diff // 2, diff // 2), (diff // 2, diff // 2), (0, 0)))
+    if img.shape[-1] == 4:
+        # premultiply RGB by Alpha
+        img[..., :3] *= img[..., 3:]
+    if pad:
+        # pad to self.h, self.h
+        diff = size - 40
+        img = np.pad(img, ((diff // 2, diff // 2), (diff // 2, diff // 2), (0, 0)))
+    
     return img
 
 

@@ -40,5 +40,5 @@ class EmojiDataset(ImageDataset):
 
 class WebLinkDataset(ImageDataset):
     def __init__(self, link: str, img_size: int = 64):
-        img = load_image(link, img_size)
+        img = load_image(link, img_size, pad=False)
         super().__init__(img)
