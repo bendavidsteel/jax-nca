@@ -378,8 +378,6 @@ class VGGTrainer(Trainer):
         max_steps: int = 96,
     ):
         pool = SamplePool(self.pool_size)
-
-        writer = get_tensorboard_logger("CLIPTrainer")
         
         rng, init_rng = jax.random.split(self.key)
         self.state = create_train_state(init_rng, self.nca, lr, self.dataset.img_shape)
@@ -392,8 +390,6 @@ class VGGTrainer(Trainer):
             batch = self._damage(batch)
 
             batch = jnp.array(batch)
-            targets, rgb_targets = self.dataset.get_batch(batch_size)
-            targets = jnp.array(targets)
 
             self.state, loss, grads, outputs, rgb_outputs = train_step_vgg(
                 self.nca.apply,
@@ -407,15 +403,6 @@ class VGGTrainer(Trainer):
             pool[indices] = np.array(outputs)
 
             bar.set_description(f"Loss: {loss.item():.4f}")
-
-            self.emit_metrics(
-                writer,
-                i,
-                batch,
-                rgb_outputs,
-                rgb_targets,
-                loss.item()
-            )
 
         return self.state
 

@@ -63,11 +63,12 @@ class UpdateNet(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        # TODO switch to float16
         update_layer_1 = nn.Conv(
-            features=64, kernel_size=(1, 1), strides=1, padding="VALID"
+            features=64, kernel_size=(1, 1), strides=1, padding="VALID", dtype=jnp.float32
         )
         update_layer_2 = nn.Conv(
-            features=64, kernel_size=(1, 1), strides=1, padding="VALID"
+            features=64, kernel_size=(1, 1), strides=1, padding="VALID", dtype=jnp.float32
         )
         update_layer_3 = nn.Conv(
             features=self.num_channels,
@@ -76,6 +77,7 @@ class UpdateNet(nn.Module):
             padding="VALID",
             kernel_init=jax.nn.initializers.zeros,
             use_bias=False,
+            dtype=jnp.float32
         )
         x = update_layer_1(x)
         x = nn.relu(x)
@@ -169,7 +171,7 @@ class NCA(nn.Module):
         if self.cell_fire_rate >= 1.0:
             stochastic_update_mask = self.get_stochastic_update_mask(
                 x, rng, self.cell_fire_rate
-            ).astype(float)
+            ).astype(jnp.float32)
             x = x + update * stochastic_update_mask
         else:
             x = x + update
@@ -178,7 +180,7 @@ class NCA(nn.Module):
             post_life_mask = self.alive(x, self.alpha_living_threshold)
 
             life_mask = pre_life_mask & post_life_mask
-            life_mask = life_mask.astype(float)
+            life_mask = life_mask.astype(jnp.float32)
 
             x = x * life_mask
 
@@ -220,7 +222,7 @@ class SobelLaplacianPerceptionNet(nn.Module):
             (num_channels, num_channels, 3, 3), dtype=jnp.float32
         )
         x_sobel_kernel += (
-            jnp.array([[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]])[
+            jnp.array([[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]], dtype=jnp.float32)[
                 jnp.newaxis, jnp.newaxis, :, :
             ]
             / 8.0
@@ -230,7 +232,7 @@ class SobelLaplacianPerceptionNet(nn.Module):
             (num_channels, num_channels, 3, 3), dtype=jnp.float32
         )
         y_sobel_kernel += (
-            jnp.array([[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]])[
+            jnp.array([[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]], dtype=jnp.float32)[
                 jnp.newaxis, jnp.newaxis, :, :
             ]
             / 8.0
@@ -240,7 +242,7 @@ class SobelLaplacianPerceptionNet(nn.Module):
             (num_channels, num_channels, 3, 3), dtype=jnp.float32
         )
         laplacian_kernel += (
-            jnp.array([[1.0, 2.0, 1.0], [2.0, -12.0, 2.0], [1.0, 2.0, 1.0]])[
+            jnp.array([[1.0, 2.0, 1.0], [2.0, -12.0, 2.0], [1.0, 2.0, 1.0]], dtype=jnp.float32)[
                 jnp.newaxis, jnp.newaxis, :, :
             ]
             / 16.0
@@ -288,7 +290,7 @@ class TextureNCA(NCA):
         shape: Tuple[int] = (48, 48),
         batch_size: int = 1,
     ):
-        seed = np.random.uniform(size=(batch_size, *shape, num_hidden_channels + 3))
+        seed = np.random.uniform(size=(batch_size, *shape, num_hidden_channels + 3)).astype(np.float32)
         return seed
     
     def to_rgb(self, x: jnp.array):

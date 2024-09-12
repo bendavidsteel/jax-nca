@@ -6,7 +6,7 @@ import requests
 
 
 def load_image(url, size, pad=True):
-    r = requests.get(url)
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     img = PIL.Image.open(io.BytesIO(r.content))
     if pad:
         img.thumbnail((40, 40), PIL.Image.LANCZOS)
